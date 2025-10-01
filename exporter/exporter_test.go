@@ -3,12 +3,13 @@ package exporter
 import (
 	"fmt"
 	"importer/customerimporter"
+	"importer/entity"
 	"testing"
 )
 
 func TestExportData(t *testing.T) {
 	path := "./test_output.csv"
-	data := []customerimporter.DomainData{
+	data := []entity.DomainData{
 		{
 			Domain:           "livejournal.com",
 			CustomerQuantity: 12,
@@ -30,7 +31,7 @@ func TestExportData(t *testing.T) {
 			CustomerQuantity: 43,
 		},
 	}
-	exporter := NewCustomerExporter(&path)
+	exporter := NewCsvExporter(path)
 
 	err := exporter.ExportData(data)
 	if err != nil {
@@ -40,9 +41,9 @@ func TestExportData(t *testing.T) {
 
 func TestExportInvalidPath(t *testing.T) {
 	path := ""
-	exporter := NewCustomerExporter(&path)
+	exporter := NewCsvExporter(path)
 
-	err := exporter.ExportData([]customerimporter.DomainData{})
+	err := exporter.ExportData([]entity.DomainData{})
 	if err == nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestExportInvalidPath(t *testing.T) {
 
 func TestExportEmptyData(t *testing.T) {
 	path := "./test_output.csv"
-	exporter := NewCustomerExporter(&path)
+	exporter := NewCsvExporter(path)
 
 	err := exporter.ExportData(nil)
 	if err == nil {
@@ -70,7 +71,7 @@ func BenchmarkImportDomainData(b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
-	exporter := NewCustomerExporter(&path)
+	exporter := NewCsvExporter(path)
 
 	b.StartTimer()
 	b.ReportAllocs()

@@ -7,19 +7,16 @@
 package customerimporter
 
 import (
-	"cmp"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"slices"
 	"strings"
-)
 
-type DomainData struct {
-	Domain           string
-	CustomerQuantity uint64
-}
+	"importer/entity"
+)
 
 type CustomerImporter struct {
 	path *string
@@ -33,40 +30,73 @@ func NewCustomerImporter(filePath *string) *CustomerImporter {
 }
 
 // ImportDomainData reads and returns sorted customer domain data from CSV file.
-func (ci CustomerImporter) ImportDomainData() ([]DomainData, error) {
+func (ci CustomerImporter) ImportDomainData() ([]entity.DomainData, error) {
 	file, err := os.Open(*ci.path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
+
 	csvReader := csv.NewReader(file)
+	csvReader.ReuseRecord = true
+
 	data := make(map[string]uint64)
 
-	// skip first line with headers
-	line, readErr := csvReader.Read()
-	if readErr != nil {
-		fmt.Println(line, readErr)
-		return nil, readErr
+	_, err = csvReader.Read()
+	if errors.Is(err, io.EOF) {
+		return []entity.DomainData{}, nil
 	}
-	for line, readErr := csvReader.Read(); readErr != io.EOF; line, readErr = csvReader.Read() {
+
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		line, readErr := csvReader.Read()
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
 		if readErr != nil {
 			return nil, readErr
 		}
-		email, domain, found := strings.Cut(line[2], "@")
-		if email == "" || !found {
-			return nil, fmt.Errorf("error invalid email address: %s", line[2])
+
+		if len(line) < 3 {
+			return nil, fmt.Errorf("error invalid csv line: %v", line)
 		}
+
+		domain, err := ci.getDomainFromEmail(line[2])
+		if err != nil {
+			return nil, err
+		}
+
 		data[domain] += 1
 	}
-	domainData := make([]DomainData, 0, len(data))
-	for k, v := range data {
-		domainData = append(domainData, DomainData{
+
+	return ci.sort(data), nil
+}
+
+func (ci CustomerImporter) getDomainFromEmail(email string) (string, error) {
+	email, domain, found := strings.Cut(email, "@")
+	if email == "" || !found {
+		return "", fmt.Errorf("error invalid email address: %s", email)
+	}
+	return domain, nil
+}
+
+func (ci CustomerImporter) sort(data map[string]uint64) []entity.DomainData {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	result := make([]entity.DomainData, 0, len(keys))
+	for _, k := range keys {
+		result = append(result, entity.DomainData{
 			Domain:           k,
-			CustomerQuantity: v,
+			CustomerQuantity: data[k],
 		})
 	}
-	slices.SortFunc(domainData, func(l, r DomainData) int {
-		return cmp.Compare(l.Domain, r.Domain)
-	})
-	return domainData, nil
+
+	return result
 }
